@@ -5,8 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-# Run arguments: python run_wild -k detections -arc 3,3,3,3,3 -c checkpoint --evaluate d-pt-243.bin --render --viz-subject S1 --viz-action Directions
-# --viz-video InTheWildData/out_cutted.mp4 --viz-camera 0 --viz-output output_scater.mp4 --viz-size 5 --viz-downsample 1 --viz-skip 9
+# Run arguments: python run_wild.py -k detections -arc 3,3,3,3,3 -c checkpoint --evaluate d-pt-243.bin --render --viz-subject S1 --viz-action Directions --viz-video InTheWildData/vid1.mkv --viz-camera 0 --viz-output output_vid.mp4 --viz-size 5 --viz-downsample 1 --viz-skip 9
+
 
 import numpy as np
 
@@ -38,10 +38,9 @@ except OSError as e:
         raise RuntimeError('Unable to create checkpoint directory:', args.checkpoint)
 
 print('Loading 2D detections...')
-#keypoints = np.load('data/data_2d_' + args.dataset + '_' + args.keypoints + '.npz')
+
 keypoints = np.load('data/data_2d_' + args.keypoints + '.npz')
-keypoints_symmetry = keypoints['metadata'].item()['keypoints_symmetry']
-#kps_left, kps_right = list(keypoints_symmetry[0]), list(keypoints_symmetry[1])
+
 
 kps_left = [1, 3, 5, 7, 9, 11, 13, 15]
 kps_right = [2, 4, 6, 8, 10, 12, 14, 16]
@@ -49,10 +48,6 @@ joints_left = list([4,5,6,11,12,13])
 joints_right = list([1,2,3,14,15,16])
 
 keypoints = keypoints['positions_2d'].item()
-
-
-
-
 
 subject = 'S1'
 
@@ -150,7 +145,6 @@ if args.resume or args.evaluate:
     print('Loading checkpoint', chk_filename)
     checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage)
     print('This model was trained for {} epochs'.format(checkpoint['epoch']))
-#    model_pos_train.load_state_dict(checkpoint['model_pos'])
     model_pos.load_state_dict(checkpoint['model_pos'])
 
 
@@ -158,15 +152,24 @@ def evaluate(test_generator, action=None, return_predictions=False):
 
     with torch.no_grad():
         model_pos.eval()
-
+        predicted_3d_pos = torch.zeros([2, 2493, 17, 3])
+        predicted_3d_pos = predicted_3d_pos.cuda()
+		# batch_2d is a copy and flipped version of the input pose 2d its a array shape... 
+		#(2, numFrames, numJoints, 3)
+		#(L,R flip: numFrames: numJoints: x,y,confidence)
         for _, batch, batch_2d in test_generator.next_epoch():
-            inputs_2d = torch.from_numpy(batch_2d.astype('float32'))
-            if torch.cuda.is_available():
-                inputs_2d = inputs_2d.cuda()
+            for i in range(243, batch_2d.shape[1]):
+                myInputs = batch_2d[:,i-243:i,:,:]
+                inputs_2d = torch.from_numpy(myInputs.astype('float32'))
+                if torch.cuda.is_available():
+                    inputs_2d = inputs_2d.cuda()
+                print('processing frame ', i)
+                # Positional model
+                predicted_3d_pos[:,i-243:i,:,:] = model_pos(inputs_2d)
+                #predicted_3d_pos = model_pos(inputs_2d)
 
-            # Positional model
-            predicted_3d_pos = model_pos(inputs_2d)
-			
+                #print('shape ', predicted_3d_pos.shape)
+
             # Test-time augmentation (if enabled)
             if test_generator.augment_enabled():
                 # Undo flipping and take average with non-flipped version
@@ -188,28 +191,21 @@ if args.render:
     gen = UnchunkedGenerator(None, None, [input_keypoints],
                              pad=pad, causal_shift=causal_shift, augment=args.test_time_augmentation,
                              kps_left=kps_left, kps_right=kps_right, joints_left=joints_left, joints_right=joints_right)
+							 
     prediction = evaluate(gen, return_predictions=True)
 	
     ground_truth = None
-	
-    if ground_truth is not None:
-        # Reapply trajectory
-        trajectory = ground_truth[:, :1]
-        ground_truth[:, 1:] += trajectory
-        prediction += trajectory
-    
+	    
     # these values taken from a camera in the h36m dataset, would be good to get/determine values rom stereo calibration of the pip cameras
     prediction = camera_to_world(prediction, R=[ 0.14070565, -0.15007018, -0.7552408 ,  0.62232804], t=[1.841107 , 4.9552846, 0.5634454])
     # We don't have the trajectory, but at least we can rebase the height
     prediction[:, :, 2] -= np.min(prediction[:, :, 2])
     
     anim_output = {'Reconstruction': prediction}
-    if ground_truth is not None and not args.viz_no_ground_truth:
-        anim_output['Ground truth'] = ground_truth
     
     input_keypoints = image_coordinates(input_keypoints[..., :2], w=width_of, h=height_of)
 
-    manual_fps = 29
+    manual_fps = 25
 
     np.savez('out_3D_vp3d', anim_output['Reconstruction'])
     camAzimuth = 70.0
