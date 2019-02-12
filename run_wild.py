@@ -20,12 +20,16 @@ import os
 import sys
 import errno
 
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+
 from common.camera import *
 from common.model import *
 from common.loss import *
 from common.generators import ChunkedGenerator, UnchunkedGenerator
 from time import time
 from common.utils import deterministic_random
+from common.visualization import render_animation_live
 
 args = parse_args()
 print(args)
@@ -148,8 +152,14 @@ if args.resume or args.evaluate:
     model_pos.load_state_dict(checkpoint['model_pos'])
 
 
-def evaluate(test_generator, action=None, return_predictions=False):
-
+def evaluateLive(test_generator, action=None, return_predictions=False):
+    parents = np.array([-1,  0,  1,  2,  0,  4,  5,  0,  7,  8,  9,  8, 11, 12,  8, 14, 15])
+    skeletonJointsRight = np.array([1,2,3,14,15,16])
+    fig1 = plt.figure(1)
+    ax = fig1.add_subplot(111, projection='3d')	
+    ax.set_xlim3d(0, 5)
+    ax.set_ylim3d(0, 5)
+    ax.set_zlim3d(0, 5)
     with torch.no_grad():
         model_pos.eval()
         predicted_3d_pos = torch.zeros([2, 2493, 17, 3])
@@ -158,17 +168,45 @@ def evaluate(test_generator, action=None, return_predictions=False):
 		#(2, numFrames, numJoints, 3)
 		#(L,R flip: numFrames: numJoints: x,y,confidence)
         for _, batch, batch_2d in test_generator.next_epoch():
-            for i in range(243, batch_2d.shape[1]):
+            for i in range(243, 300):
                 myInputs = batch_2d[:,i-243:i,:,:]
                 inputs_2d = torch.from_numpy(myInputs.astype('float32'))
                 if torch.cuda.is_available():
                     inputs_2d = inputs_2d.cuda()
                 print('processing frame ', i)
                 # Positional model
-                predicted_3d_pos[:,i-243:i,:,:] = model_pos(inputs_2d)
+                tempPredictedPos = model_pos(inputs_2d)
+                predicted_3d_pos[:,i-243:i,:,:] = tempPredictedPos
                 #predicted_3d_pos = model_pos(inputs_2d)
-
+                tempPredictedPos[1, :, :, 0] *= -1
+                tempPredictedPos[1, :, joints_left + joints_right] = tempPredictedPos[1, :, joints_right + joints_left]
+                tempPredictedPos = torch.mean(tempPredictedPos, dim=0, keepdim=True)
+				
+                #render_animation_live(cpuPred)				
                 #print('shape ', predicted_3d_pos.shape)
+
+                # Test-time augmentation (if enabled)
+            if test_generator.augment_enabled():
+                # Undo flipping and take average with non-flipped version
+                predicted_3d_pos[1, :, :, 0] *= -1
+                predicted_3d_pos[1, :, joints_left + joints_right] = predicted_3d_pos[1, :, joints_right + joints_left]
+                predicted_3d_pos = torch.mean(predicted_3d_pos, dim=0, keepdim=True)
+				
+                
+            if return_predictions:
+                return predicted_3d_pos.squeeze(0).cpu().numpy()
+
+def evaluate(test_generator, action=None, return_predictions=False):
+    with torch.no_grad():
+        model_pos.eval()
+        N = 0
+        for _, batch, batch_2d in test_generator.next_epoch():
+            inputs_2d = torch.from_numpy(batch_2d.astype('float32'))
+            if torch.cuda.is_available():
+                inputs_2d = inputs_2d.cuda()
+
+            # Positional model
+            predicted_3d_pos = model_pos(inputs_2d)
 
             # Test-time augmentation (if enabled)
             if test_generator.augment_enabled():
@@ -180,8 +218,22 @@ def evaluate(test_generator, action=None, return_predictions=False):
             if return_predictions:
                 return predicted_3d_pos.squeeze(0).cpu().numpy()
 
-
+				
 if args.render:
+    print('Rendering...')
+    my_action = 'Directions 1'
+
+    input_keypoints = keypoints[args.viz_subject][my_action][args.viz_camera].copy()
+
+        
+    gen = UnchunkedGenerator(None, None, [input_keypoints],
+                             pad=pad, causal_shift=causal_shift, augment=args.test_time_augmentation,
+                             kps_left=kps_left, kps_right=kps_right, joints_left=joints_left, joints_right=joints_right)
+							 
+    prediction = evaluateLive(gen, return_predictions=True)
+
+if args.viz_output:	
+
     print('Rendering...')
     my_action = 'Directions 1'
 

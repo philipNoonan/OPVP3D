@@ -50,6 +50,16 @@ def downsample_tensor(X, factor):
     length = X.shape[0]//factor * factor
     return np.mean(X[:length].reshape(-1, factor, *X.shape[1:]), axis=1)
 
+	
+#figLive = plt.figure(figsize=(5,5))    	
+def render_animation_live(poses, size=5, azim=70.0):
+    #print('shape', poses.shape)
+    for x in range(17):
+        plt.scatter(poses[0,x,0],poses[0,x,1])	
+        plt.cla()
+
+
+	
 def render_animation(keypoints, poses, fps, bitrate, azim, output, viewport,
                      limit=-1, downsample=1, size=6, input_video_path=None, input_video_skip=0):
     """
