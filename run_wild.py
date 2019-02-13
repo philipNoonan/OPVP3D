@@ -27,6 +27,7 @@ import errno
 import glfw
 from OpenGL.GL import *
 import OpenGL.GL.shaders
+import pyrr
 
 from common.camera import *
 from common.model import *
@@ -41,8 +42,11 @@ kps_right = [2, 4, 6, 8, 10, 12, 14, 16]
 joints_left = list([4,5,6,11,12,13])
 joints_right = list([1,2,3,14,15,16])
 parents = [-1,  0,  1,  2,  0,  4,  5,  0,  7,  8,  9,  8, 11, 12,  8, 14, 15]
-parentsIndices = np.array([1, 0, 2, 1, 3, 2, 4, 0, 5, 4, 6, 5, 7, 0, 8, 7, 9, 8, 10, 9, 11, 8, 12, 11, 13, 12, 14, 8, 15, 14, 16, 15], dtype='float32')
+parentsIndices = np.array([1, 0, 2, 1, 3, 2, 4, 0, 5, 4, 6, 5, 7, 0, 8, 7, 9, 8, 10, 9, 11, 8, 12, 11, 13, 12, 14, 8, 15, 14, 16, 15], dtype='uint32')
 
+
+w_width = 800
+w_height = 600
 
 
 skeletonJointsRight = [1,2,3,14,15,16]
@@ -84,7 +88,7 @@ def fetch(subjects, keypoints, stride, action_filter=None, subset=1, parse_3d_po
 
     return out_camera_params, out_poses_3d, out_poses_2d
 
-def evaluateLive(test_generator, model_pos, VBO, window, action=None, return_predictions=False):
+def evaluateLive(test_generator, model_pos, VBO, window, model_loc, action=None, return_predictions=False):
 
 
     #fig1 = plt.figure(1)
@@ -105,7 +109,7 @@ def evaluateLive(test_generator, model_pos, VBO, window, action=None, return_pre
                 inputs_2d = torch.from_numpy(myInputs.astype('float32'))
                 if torch.cuda.is_available():
                     inputs_2d = inputs_2d.cuda()
-                print('processing frame ', i)
+                #print('processing frame ', i)
                 # Positional model
                 tempPredictedPos = model_pos(inputs_2d)
                 predicted_3d_pos[:,i-243:i,:,:] = tempPredictedPos
@@ -118,34 +122,23 @@ def evaluateLive(test_generator, model_pos, VBO, window, action=None, return_pre
                 cpuPred = camera_to_world(cpuPred, R=[ 0.0, 0.0, 0.0 , 0.0], t=[0 , 0, 0])
                 # We don't have the trajectory, but at least we can rebase the height
                 cpuPred[:, :, 2] -= np.min(cpuPred[:, :, 2])
-                bufArray = cpuPred[0,:,:].flatten()
+                cpuPred[:, :, 1] *= -1.0
+
+
+                model = pyrr.matrix44.create_from_axis_rotation([0.0,1.0,0.0], 0.5 * glfw.get_time())
+                glUniformMatrix4fv(model_loc, 1, GL_FALSE, model)
+
+                bufArray = cpuPred[0,:,:].flatten().astype(dtype='float32')
 
                 glBindBuffer(GL_ARRAY_BUFFER, VBO)
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 17 * 3 * 4, bufArray)
                 glfw.poll_events()
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-                glDrawElements(GL_LINES, 16, GL_UNSIGNED_INT, None)
+                glDrawElements(GL_LINES, 32, GL_UNSIGNED_INT, None)
+                #glDrawArrays(GL_POINTS, 0, 17)
                 glfw.swap_buffers(window)
 
-                #anim_output = {'Reconstruction': cpuPred}
-                #plt.figure(1)	
-                # https://stackoverflow.com/questions/22171558/what-does-enumerate-mean
-                #for j, j_parent in enumerate(parents):
-                #    if j_parent == -1:
-                #        continue
-                #    col = 'red' if j in skeletonJointsRight else 'black'
-                    
-                    
-                #    ax.plot([cpuPred[0, j, 0], cpuPred[0, j_parent, 0]],[cpuPred[0, j, 1], cpuPred[0, j_parent, 1]], [cpuPred[0, j, 2], cpuPred[0, j_parent, 2]], zdir='z', c=col)
-                #    ax.set_xlim3d(-2, 2)
-                #    ax.set_ylim3d(-2, 2)
-                #    ax.set_zlim3d(-2, 2)
-                    
 
-                #plt.pause(0.01)
-                #plt.cla()
-                #render_animation_live(cpuPred)				
-                #print('shape ', predicted_3d_pos.shape)
 
                 # Test-time augmentation (if enabled)
             if test_generator.augment_enabled():
@@ -180,51 +173,35 @@ def evaluate(test_generator, model_pos, action=None, return_predictions=False):
             if return_predictions:
                 return predicted_3d_pos.squeeze(0).cpu().numpy()
 
+def window_resize(window, width, height):
+    glViewport(0, 0, width, height)
+
 def main():
 
 
     if not glfw.init():
         return
 
-    window = glfw.create_window(800, 600, "My OpenGL window", None, None)
+    window = glfw.create_window(w_width, w_height, "My OpenGL window", None, None)
 
     if not window:
         glfw.terminate()
         return
 
     glfw.make_context_current(window)
-    #        positions        colors
-    cube = [-0.5, -0.5,  0.5, 1.0, 0.0, 0.0,
-             0.5, -0.5,  0.5, 0.0, 1.0, 0.0,
-             0.5,  0.5,  0.5, 0.0, 0.0, 1.0,
-            -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
-            
-            -0.5, -0.5, -0.5, 1.0, 0.0, 0.0,
-             0.5, -0.5, -0.5, 0.0, 1.0, 0.0,
-             0.5,  0.5, -0.5, 0.0, 0.0, 1.0,
-            -0.5,  0.5, -0.5, 1.0, 1.0, 1.0]
-
-    skeletonArray = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15, 16]
-    skeletonArray = np.array(skeletonArray, dtype = np.float32)
-
-    cube = np.array(cube, dtype = np.float32)
-
-    indices = [0, 1, 2, 2, 3, 0,
-               4, 5, 6, 6, 7, 4,
-               4, 5, 1, 1, 0, 4,
-               6, 7, 3, 3, 2, 6,
-               5, 6, 2, 2, 1, 5,
-               7, 4, 0, 0, 3, 7]
-
-    indices = np.array(indices, dtype= np.uint32)
+    glfw.set_window_size_callback(window, window_resize)
 
     vertex_shader = """
     #version 330
     in vec3 position;
-    uniform mat4 transform;
+
+    uniform mat4 view;
+    uniform mat4 model;
+    uniform mat4 projection;
+
     void main()
     {
-        gl_Position = transform * vec4(position, 1.0f);
+        gl_Position = projection * view * model * vec4(position, 1.0f);
     }
     """
 
@@ -245,10 +222,10 @@ def main():
 
     EBO = glGenBuffers(1)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 128, parentsIndices, GL_STATIC_DRAW)
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 32 * 8, parentsIndices, GL_STATIC_DRAW)
 
     position = glGetAttribLocation(shader, "position")
-    glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
+    glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
     glEnableVertexAttribArray(position)
 
 
@@ -256,9 +233,23 @@ def main():
 
     glUseProgram(shader)
 
+    view = pyrr.matrix44.create_from_translation(pyrr.Vector3([0.0, 0.0, -3.0]))
+    projection = pyrr.matrix44.create_perspective_projection_matrix(45.0, w_width / w_height, 0.1, 100.0)
+    model = pyrr.matrix44.create_from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
+
+    view_loc = glGetUniformLocation(shader, "view")
+    proj_loc = glGetUniformLocation(shader, "projection")
+    model_loc = glGetUniformLocation(shader, "model")
+
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, view)
+    glUniformMatrix4fv(proj_loc, 1, GL_FALSE, projection)
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, model)
+    
+
+
     glClearColor(0.2, 0.3, 0.2, 1.0)
     glEnable(GL_DEPTH_TEST)
-
+    glViewport(0, 0, w_width, w_height)
 
 
 
@@ -395,7 +386,7 @@ def main():
                                  pad=pad, causal_shift=causal_shift, augment=args.test_time_augmentation,
                                  kps_left=kps_left, kps_right=kps_right, joints_left=joints_left, joints_right=joints_right)
 
-        prediction = evaluateLive(gen, model_pos, VBO, window, return_predictions=True)
+        prediction = evaluateLive(gen, model_pos, VBO, window, model_loc, return_predictions=True)
         glfw.terminate()
     
 
