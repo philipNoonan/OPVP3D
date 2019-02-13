@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{f344c270-fc92-4a8f-b1a3-dfd2067d4810}</ProjectGuid>
+    <ProjectHome />
+    <StartupFile>run_wild.py</StartupFile>
+    <SearchPath />
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <ProjectTypeGuids>{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <InterpreterId />
+    <CommandLineArguments>-k detections -arc 3,3,3,3,3 -c checkpoint --evaluate d-pt-243.bin --viz-subject S1 --viz-action Directions --viz-video InTheWildData/vid1.mkv --viz-camera 0</CommandLineArguments>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
+  <PropertyGroup>
+    <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="checkpoint\d-pt-243.bin" />
+    <Content Include="common\__pycache__\arguments.cpython-36.pyc" />
+    <Content Include="common\__pycache__\camera.cpython-36.pyc" />
+    <Content Include="common\__pycache__\generators.cpython-36.pyc" />
+    <Content Include="common\__pycache__\h36m_dataset.cpython-36.pyc" />
+    <Content Include="common\__pycache__\loss.cpython-36.pyc" />
+    <Content Include="common\__pycache__\mocap_dataset.cpython-36.pyc" />
+    <Content Include="common\__pycache__\model.cpython-36.pyc" />
+    <Content Include="common\__pycache__\quaternion.cpython-36.pyc" />
+    <Content Include="common\__pycache__\skeleton.cpython-36.pyc" />
+    <Content Include="common\__pycache__\utils.cpython-36.pyc" />
+    <Content Include="common\__pycache__\visualization.cpython-36.pyc" />
+    <Content Include="data\data_2d_detections.npz" />
+    <Content Include="data\data_3d_h36m.npz" />
+    <Content Include="data\old_data_2d_detections.npz" />
+    <Content Include="data\placeHolderData_3D__h36m.npz.txt" />
+    <Content Include="data\short_data_2d_detections.npz" />
+    <Content Include="detectron_tools\detectron_tools.txt" />
+    <Content Include="images\batching.png" />
+    <Content Include="images\convolutions_1f_naive.png" />
+    <Content Include="images\convolutions_1f_optimized.png" />
+    <Content Include="images\convolutions_anim.gif" />
+    <Content Include="images\convolutions_causal.png" />
+    <Content Include="images\convolutions_normal.png" />
+    <Content Include="images\demo_h36m.gif" />
+    <Content Include="images\demo_humaneva.gif" />
+    <Content Include="images\demo_humaneva_unlabeled.gif" />
+    <Content Include="images\demo_temporal.gif" />
+    <Content Include="images\demo_yt.gif" />
+    <Content Include="out_3D_vp3d.npz" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="common\arguments.py" />
+    <Compile Include="common\camera.py" />
+    <Compile Include="common\generators.py" />
+    <Compile Include="common\h36m_dataset.py" />
+    <Compile Include="common\humaneva_dataset.py" />
+    <Compile Include="common\loss.py" />
+    <Compile Include="common\mocap_dataset.py" />
+    <Compile Include="common\model.py" />
+    <Compile Include="common\quaternion.py" />
+    <Compile Include="common\skeleton.py" />
+    <Compile Include="common\utils.py" />
+    <Compile Include="common\visualization.py" />
+    <Compile Include="data\data_utils.py" />
+    <Compile Include="data\prepare_data_2d_h36m_generic.py" />
+    <Compile Include="data\prepare_data_2d_h36m_sh.py" />
+    <Compile Include="data\prepare_data_h36m.py" />
+    <Compile Include="data\prepare_data_humaneva.py" />
+    <Compile Include="detectron_tools\infer_simple.py" />
+    <Compile Include="kinect_data_toolbox.py" />
+    <Compile Include="run.py" />
+    <Compile Include="runOpenpose.py" />
+    <Compile Include="run_wild.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="checkpoint" />
+    <Folder Include="common" />
+    <Folder Include="common\__pycache__" />
+    <Folder Include="data" />
+    <Folder Include="detectron_tools" />
+    <Folder Include="images" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+</Project>

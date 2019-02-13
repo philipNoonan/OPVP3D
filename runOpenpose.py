@@ -1,4 +1,5 @@
 import sys
+sys.path.append("C:/Code/ExternalProjects/pyOpenpose/build/Release")
 import cv2
 import os
 from sys import platform
@@ -23,7 +24,7 @@ while(True):
     # Capture frame-by-frame
     ret, imageToProcess = cap.read()
     datum.cvInputData = imageToProcess
-	opWrapper.emplaceAndPop([datum])
+    opWrapper.emplaceAndPop([datum])
 	
     # Display the resulting frame
     cv2.imshow('frame',datum.cvOutputData)
