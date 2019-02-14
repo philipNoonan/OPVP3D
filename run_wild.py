@@ -21,8 +21,11 @@ import os
 import sys
 import errno
 
-#import matplotlib.pyplot as plt
-#from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+sys.path.append("C:/Code/ExternalProjects/pyOpenpose/build/Release")
+import cv2
+from sys import platform
+import pyopenpose as op
+
 
 import glfw
 from OpenGL.GL import *
@@ -88,14 +91,11 @@ def fetch(subjects, keypoints, stride, action_filter=None, subset=1, parse_3d_po
 
     return out_camera_params, out_poses_3d, out_poses_2d
 
-def evaluateLive(test_generator, model_pos, VBO, window, model_loc, action=None, return_predictions=False):
 
 
-    #fig1 = plt.figure(1)
-    #ax = fig1.add_subplot(111, projection='3d')	
-    #ax.set_xlim3d(0, 5)
-    #ax.set_ylim3d(0, 5)
-    #ax.set_zlim3d(0, 5)
+def evaluateLive(test_generator, model_pos, VBO, window, model_loc, cap, opWrapper, action=None, return_predictions=False):
+
+
     with torch.no_grad():
         model_pos.eval()
         predicted_3d_pos = torch.zeros([2, 2493, 17, 3])
@@ -105,6 +105,15 @@ def evaluateLive(test_generator, model_pos, VBO, window, model_loc, action=None,
 		#(L,R flip: numFrames: numJoints: x,y,confidence)
         for _, batch, batch_2d in test_generator.next_epoch():
             for i in range(243, batch_2d.shape[1]):
+                datum = op.Datum()
+                ret, imageToProcess = cap.read()
+                datum.cvInputData = imageToProcess
+                opWrapper.emplaceAndPop([datum])
+
+                cv2.imshow('frame',datum.cvOutputData)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
                 myInputs = batch_2d[:,i-243:i,:,:]
                 inputs_2d = torch.from_numpy(myInputs.astype('float32'))
                 if torch.cuda.is_available():
@@ -139,7 +148,6 @@ def evaluateLive(test_generator, model_pos, VBO, window, model_loc, action=None,
                 glfw.swap_buffers(window)
 
 
-
                 # Test-time augmentation (if enabled)
             if test_generator.augment_enabled():
                 # Undo flipping and take average with non-flipped version
@@ -150,6 +158,7 @@ def evaluateLive(test_generator, model_pos, VBO, window, model_loc, action=None,
                 
             if return_predictions:
                 return predicted_3d_pos.squeeze(0).cpu().numpy()
+
 
 def evaluate(test_generator, model_pos, action=None, return_predictions=False):
     with torch.no_grad():
@@ -173,10 +182,24 @@ def evaluate(test_generator, model_pos, action=None, return_predictions=False):
             if return_predictions:
                 return predicted_3d_pos.squeeze(0).cpu().numpy()
 
+
+
 def window_resize(window, width, height):
     glViewport(0, 0, width, height)
 
 def main():
+    #cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture('D://data//videos//VID_29551_cam0_crop.mkv')
+
+    #parser = argparse.ArgumentParser()
+    opWrapper = op.WrapperPython()
+
+    params = dict()
+    params["model_folder"] = "D://models//"
+
+    opWrapper.configure(params)
+
+    opWrapper.start()
 
 
     if not glfw.init():
@@ -247,7 +270,7 @@ def main():
     
 
 
-    glClearColor(0.2, 0.3, 0.2, 1.0)
+    glClearColor(114.0/255.0, 144.0/255.0, 154.0/255.0, 1.0)
     glEnable(GL_DEPTH_TEST)
     glViewport(0, 0, w_width, w_height)
 
@@ -307,7 +330,7 @@ def main():
     
     
     
-    
+    # IF RENDERING TO A VIDEO
     if args.viz_output:	
         model_pos = TemporalModel(poses_valid_2d[0].shape[1], poses_valid_2d[0].shape[2], 17, filter_widths=filter_widths, causal=args.causal, dropout=args.dropout, channels=args.channels, dense=args.dense)
     else:
@@ -338,7 +361,7 @@ def main():
         print('This model was trained for {} epochs'.format(checkpoint['epoch']))
         model_pos.load_state_dict(checkpoint['model_pos'])
     
-
+    # IF RENDERING TO A VIDEO
     if args.viz_output:	
     
         print('Rendering...')
@@ -374,6 +397,7 @@ def main():
                          limit=args.viz_limit, downsample=args.viz_downsample, size=args.viz_size,
                          input_video_path=args.viz_video, viewport=(width_of, height_of),
                          input_video_skip=args.viz_skip)
+    # IF RENDERING LIVE
 
     else:
         print('Rendering...')
@@ -386,8 +410,10 @@ def main():
                                  pad=pad, causal_shift=causal_shift, augment=args.test_time_augmentation,
                                  kps_left=kps_left, kps_right=kps_right, joints_left=joints_left, joints_right=joints_right)
 
-        prediction = evaluateLive(gen, model_pos, VBO, window, model_loc, return_predictions=True)
+        prediction = evaluateLive(gen, model_pos, VBO, window, model_loc, cap, opWrapper, return_predictions=True)
         glfw.terminate()
+        cap.release()
+        cv2.destroyAllWindows()
     
 
 
